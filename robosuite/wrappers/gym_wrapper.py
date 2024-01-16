@@ -38,9 +38,6 @@ class GymWrapper(Wrapper, gym.Env):
         robots = "".join([type(robot.robot_model).__name__ for robot in self.env.robots])
         self.name = robots + "_" + type(self.env).__name__
 
-        # Get reward range
-        self.reward_range = (0, self.env.reward_scale)
-
         if keys is None:
             keys = []
             # Add object obs if requested
@@ -68,6 +65,12 @@ class GymWrapper(Wrapper, gym.Env):
         self.observation_space = spaces.Box(low, high)
         low, high = self.env.action_spec
         self.action_space = spaces.Box(low, high)
+    
+    def sample_goal(self):
+        x = np.random.uniform(0.0, 0.4)
+        y = np.random.uniform(-0.4,0.4)
+        z = lambda x_pos: 0.99 + np.tan(0.26) * x_pos
+        return [x,y,z(x)]
 
     def _flatten_obs(self, obs_dict, verbose=False):
         """
@@ -117,6 +120,7 @@ class GymWrapper(Wrapper, gym.Env):
         Returns:
             np.array: Flattened environment observation space after reset occurs
         """
+        goal_pos = self.sample_goal()
         if seed is not None:
             if isinstance(seed, int):
                 np.random.seed(seed)
@@ -136,6 +140,8 @@ class GymWrapper(Wrapper, gym.Env):
         self.env.set_xml_processor(processor=self._add_indicators_to_model)
 
         ob_dict = self.env.reset(goal_pos)
+        print(self.keys)
+        print(f"OBSERVATIONS: {ob_dict}")
         if self.env.use_camera_obs:
             render_frame = ob_dict[self.render_camera_key]
             return self._flatten_obs(ob_dict), {"render_frame":render_frame} 
@@ -160,8 +166,10 @@ class GymWrapper(Wrapper, gym.Env):
                 - (bool) episode ending after an externally defined condition
                 - (dict) misc information
         """
+        action *= 0.5
         ob_dict, reward, terminated, info = self.env.step(action)
-        # print("ob_dict keys:", ob_dict.keys())
+        print("ob_dict keys:", ob_dict.keys())
+        print(f"ob_dict: {ob_dict}")
         
         if self.env.use_camera_obs:
             render_frame = ob_dict[self.render_camera_key]

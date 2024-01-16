@@ -188,8 +188,9 @@ class AirHockey(SingleArmEnv):
         gripper_types = "WipingGripper"
 
         self.arm_limit_collision_penalty = -10
-        self.success_reward = 1
+        self.success_reward = 20
         self.goal_pos = [0,0,1]
+        self.pre_dist = None
 
         super().__init__(
             robots=robots,
@@ -219,8 +220,8 @@ class AirHockey(SingleArmEnv):
             renderer_config=renderer_config,
         )
 
-    
-    def reset(self, goal_pos=[0,0,1]):
+
+    def reset(self, goal_pos=[1, 0, 1]):
         self.goal_pos = goal_pos
         return super().reset()
 
@@ -274,7 +275,7 @@ class AirHockey(SingleArmEnv):
         """
         reward = 0.0
 
-        print(self.robots[0]._joint_positions)
+        # print(self.robots[0]._joint_positions)
 
         # print(self.sim.model._site_name2id.keys())
 
@@ -291,6 +292,29 @@ class AirHockey(SingleArmEnv):
 
         # print(self.sim.data.site_xpos[self.robots[0].eef_site_id])
 
+        # sparse completion reward
+        # TODO: CHANGE THIS
+        # if self._check_success():
+        #     reward = 2.25
+
+        # reaching reward
+        gripper_site_pos = self.sim.data.site_xpos[self.robots[0].eef_site_id]
+        print(f"gripper position: {gripper_site_pos}")
+        print(f"goal position: {self.goal_pos}")
+        dist = np.linalg.norm(gripper_site_pos - self.goal_pos, ord=2)
+        reaching_reward = 0
+        if self.pre_dist is not None:
+            if self.pre_dist >= dist:
+                reaching_reward += 1
+            else:
+                reaching_reward -= 2
+                
+        self.pre_dist = dist
+
+        reward += reaching_reward
+        
+
+        # print(reward)
         return reward
     
     def _post_action(self, action):
@@ -311,7 +335,7 @@ class AirHockey(SingleArmEnv):
 
         
         done, reward = self._check_terminated(done, reward, info)
-
+        
         return reward, done, info
     
     def _check_terminated(self, done, reward, info):
@@ -333,17 +357,23 @@ class AirHockey(SingleArmEnv):
             reward = self.arm_limit_collision_penalty
             print("arm collision happens")
             info["terminated_reason"] = "arm_hit_table"
+            info["time"] = self.timestep
+
             done = True
 
         if self.check_contact("gripper0_hand_collision"):
             reward = self.arm_limit_collision_penalty
             print("gripper hand collision happens")
             info["terminated_reason"] = "gripper_hit_table"
+            info["time"] = self.timestep
+
             done = True
         
         if self.robots[0].check_q_limits():
             reward = self.arm_limit_collision_penalty
             print("reach joint limits")
+            info["time"] = self.timestep
+
             info["terminated_reason"] = "arm_limit"
             done = True
         
@@ -356,6 +386,7 @@ class AirHockey(SingleArmEnv):
         if self._check_success():
             reward = self.success_reward
             print("success")
+            info["time"] = self.timestep
             info["terminated_reason"] = "success"
             done = True
 
@@ -477,32 +508,36 @@ class AirHockey(SingleArmEnv):
             modality = "object"
 
             # cube-related observables
-            @sensor(modality=modality)
-            def cube_pos(obs_cache):
-                return np.array(self.sim.data.body_xpos[self.cube_body_id])
+            # @sensor(modality=modality)
+            # def cube_pos(obs_cache):
+            #     return np.array(self.sim.data.body_xpos[self.cube_body_id])
 
-            @sensor(modality=modality)
-            def cube_quat(obs_cache):
-                return convert_quat(np.array(self.sim.data.body_xquat[self.cube_body_id]), to="xyzw")
+            # @sensor(modality=modality)
+            # def cube_quat(obs_cache):
+            #     return convert_quat(np.array(self.sim.data.body_xquat[self.cube_body_id]), to="xyzw")
 
-            @sensor(modality=modality)
-            def gripper_to_cube_pos(obs_cache):
-                return (
-                    obs_cache[f"{pf}eef_pos"] - obs_cache["cube_pos"]
-                    if f"{pf}eef_pos" in obs_cache and "cube_pos" in obs_cache
-                    else np.zeros(3)
-                )
-
-            sensors = [cube_pos, cube_quat, gripper_to_cube_pos]
-            names = [s.__name__ for s in sensors]
-
-            # Create observables
-            # for name, s in zip(names, sensors):
-            #     observables[name] = Observable(
-            #         name=name,
-            #         sensor=s,
-            #         sampling_rate=self.control_freq,
+            # @sensor(modality=modality)
+            # def gripper_to_cube_pos(obs_cache):
+            #     return (
+            #         obs_cache[f"{pf}eef_pos"] - obs_cache["cube_pos"]
+            #         if f"{pf}eef_pos" in obs_cache and "cube_pos" in obs_cache
+            #         else np.zeros(3)
             #     )
+
+            @sensor(modality=modality)
+            def goal_pos(obs_cache):
+                return np.array(self.goal_pos)
+
+            sensors = [goal_pos]
+            names = [s.__name__ for s in sensors]
+            
+            # Create observables
+            for name, s in zip(names, sensors):
+                observables[name] = Observable(
+                    name=name,
+                    sensor=s,
+                    sampling_rate=self.control_freq,
+                )
 
         return observables
     

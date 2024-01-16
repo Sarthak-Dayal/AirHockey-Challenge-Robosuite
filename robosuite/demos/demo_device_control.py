@@ -254,7 +254,7 @@ if __name__ == "__main__":
             # Step through the simulation and render
             obs, reward, done, trunc, info = env.step(action)
             reached_reward += reward
-            print(obs, reward, goal)
+            # print(obs, reward, goal)
             env.render()
 
             # if at the goal for a while, reset

@@ -316,7 +316,7 @@ class OperationalSpaceController(Controller):
         else:
             desired_pos = np.array(self.goal_pos)
 
-        desired_pos[2] = 0.2685 * desired_pos[0] + 0.985
+        desired_pos[2] = 0.19 * desired_pos[0] + 0.96
         # desired_pos[2] = 0.2685 * desired_pos[0] + 0.95
         desired_pos = np.clip(desired_pos, self.position_limits[0], self.position_limits[1])
         
